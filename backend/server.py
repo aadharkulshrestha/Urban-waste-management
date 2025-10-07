@@ -234,12 +234,16 @@ async def register_user(user_data: UserCreate):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Create user
+    # Create user object (without password)
     user_dict = user_data.dict()
-    user_dict['password'] = hash_password(user_data.password)
+    user_dict.pop('password')  # Remove password from user object
     user_obj = User(**user_dict)
     
-    await db.users.insert_one(user_obj.dict())
+    # Create database document with password
+    db_user_dict = user_obj.dict()
+    db_user_dict['password'] = hash_password(user_data.password)
+    
+    await db.users.insert_one(db_user_dict)
     
     # Create JWT token
     token = create_jwt_token(user_obj.id, user_obj.role)

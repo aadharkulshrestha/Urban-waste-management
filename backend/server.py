@@ -7,6 +7,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from pathlib import Path
+from contextlib import asynccontextmanager
 import os
 import uuid
 import hashlib
@@ -31,8 +32,16 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'cleancity_secret_key_change_in_produc
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
 
+# Lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    yield
+    # Shutdown
+    client.close()
+
 # FastAPI app setup
-app = FastAPI(title="CleanCity Connect API", version="1.0.0")
+app = FastAPI(title="CleanCity Connect API", version="1.0.0", lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
@@ -432,14 +441,26 @@ async def create_pickup_request(request_data: dict, current_user: dict = Depends
     
     return {"message": "Pickup request submitted successfully", "request_id": pickup_obj.id}
 
+def serialize_mongo_document(doc):
+    """Convert MongoDB document ObjectIds to strings."""
+    if not doc:
+        return doc
+    doc["_id"] = str(doc["_id"])
+    return doc
+
 @api_router.get("/pickup-requests")
 async def get_pickup_requests(current_user: dict = Depends(get_current_user)):
-    if current_user['role'] == UserRole.CITIZEN:
-        requests = await db.pickup_requests.find({"user_id": current_user['user_id']}).to_list(1000)
+    if current_user["role"] == UserRole.CITIZEN:
+        requests = await db.pickup_requests.find(
+            {"user_id": current_user["user_id"]}
+        ).to_list(1000)
     else:
         requests = await db.pickup_requests.find().to_list(1000)
-    
-    return requests
+
+    # Convert all ObjectIds to strings
+    serialized_requests = [serialize_mongo_document(r) for r in requests]
+
+    return {"count": len(serialized_requests), "requests": serialized_requests}
 
 # Vehicle Tracking
 @api_router.post("/tracking/location")
@@ -568,10 +589,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, port=8001)

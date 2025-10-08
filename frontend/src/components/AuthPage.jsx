@@ -189,24 +189,7 @@ const AuthPage = () => {
                   </Button>
                 </form>
                 
-                {/* Demo Accounts */}
-                <div className="mt-6 pt-4 border-t border-slate-200">
-                  <p className="text-sm text-slate-600 mb-3 text-center">Demo Accounts:</p>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between items-center p-2 bg-emerald-50 rounded-lg">
-                      <span><strong>Citizen:</strong> citizen@demo.com</span>
-                      <Badge className="bg-emerald-100 text-emerald-700">demo123</Badge>
-                    </div>
-                    <div className="flex justify-between items-center p-2 bg-teal-50 rounded-lg">
-                      <span><strong>Worker:</strong> worker@demo.com</span>
-                      <Badge className="bg-teal-100 text-teal-700">demo123</Badge>
-                    </div>
-                    <div className="flex justify-between items-center p-2 bg-blue-50 rounded-lg">
-                      <span><strong>Admin:</strong> admin@demo.com</span>
-                      <Badge className="bg-blue-100 text-blue-700">demo123</Badge>
-                    </div>
-                  </div>
-                </div>
+               
               </CardContent>
             </TabsContent>
 

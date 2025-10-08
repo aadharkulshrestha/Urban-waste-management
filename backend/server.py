@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from pathlib import Path
+from bson import ObjectId 
 from contextlib import asynccontextmanager
 import os
 import uuid
@@ -17,6 +19,7 @@ import asyncio
 import random
 from enum import Enum
 import logging
+from bson import json_util
 
 # Load environment variables
 ROOT_DIR = Path(__file__).parent
@@ -44,6 +47,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="CleanCity Connect API", version="1.0.0", lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000"
+    ],  # React dev server
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # User Roles
 class UserRole(str, Enum):
@@ -288,10 +302,9 @@ async def get_user_profile(current_user: dict = Depends(get_current_user)):
     user = await db.users.find_one({"id": current_user['user_id']})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Remove password from response
+
     user.pop('password', None)
-    return user
+    return serialize_mongo_document(user)  # ✅ FIX
 
 @api_router.put("/users/profile")
 async def update_user_profile(user_data: dict, current_user: dict = Depends(get_current_user)):
@@ -310,7 +323,8 @@ async def update_user_profile(user_data: dict, current_user: dict = Depends(get_
 @api_router.get("/bins")
 async def get_all_bins(current_user: dict = Depends(get_current_user)):
     bins = await db.bins.find().to_list(1000)
-    return bins
+    return serialize_mongo_document(bins)  # ✅ FIX
+
 
 @api_router.post("/bins")
 async def create_bin(bin_data: WasteBin, current_user: dict = Depends(get_current_user)):
@@ -338,10 +352,10 @@ async def update_bin_status(bin_id: str, status_data: dict, current_user: dict =
     
     # Broadcast update to connected clients
     await manager.broadcast(json.dumps({
-        "type": "bin_update",
-        "bin_id": bin_id,
-        "data": update_data
-    }))
+    "type": "bin_update",
+    "bin_id": bin_id,
+    "data": update_data
+}, default=json_util.default))
     
     return {"message": "Bin status updated successfully"}
 
@@ -365,13 +379,12 @@ async def create_complaint(complaint_data: dict, current_user: dict = Depends(ge
 @api_router.get("/complaints")
 async def get_complaints(current_user: dict = Depends(get_current_user)):
     if current_user['role'] == UserRole.CITIZEN:
-        # Citizens can only see their own complaints
         complaints = await db.complaints.find({"user_id": current_user['user_id']}).to_list(1000)
     else:
-        # Workers and admins can see all complaints
         complaints = await db.complaints.find().to_list(1000)
     
-    return complaints
+    return serialize_mongo_document(complaints)  # ✅ FIX
+
 
 @api_router.put("/complaints/{complaint_id}/status")
 async def update_complaint_status(complaint_id: str, status_data: dict, current_user: dict = Depends(get_current_user)):
@@ -393,13 +406,12 @@ async def update_complaint_status(complaint_id: str, status_data: dict, current_
 @api_router.get("/routes")
 async def get_routes(current_user: dict = Depends(get_current_user)):
     if current_user['role'] == UserRole.WORKER:
-        # Workers see only their assigned routes
         routes = await db.routes.find({"worker_id": current_user['user_id']}).to_list(1000)
     else:
-        # Admins see all routes
         routes = await db.routes.find().to_list(1000)
-    
-    return routes
+
+    return serialize_mongo_document(routes)  # ✅ FIX
+
 
 @api_router.post("/routes")
 async def create_route(route_data: dict, current_user: dict = Depends(get_current_user)):
@@ -442,11 +454,21 @@ async def create_pickup_request(request_data: dict, current_user: dict = Depends
     return {"message": "Pickup request submitted successfully", "request_id": pickup_obj.id}
 
 def serialize_mongo_document(doc):
-    """Convert MongoDB document ObjectIds to strings."""
-    if not doc:
+    """Recursively converts MongoDB ObjectIds to strings (supports nested dicts/lists)."""
+    if isinstance(doc, list):
+        return [serialize_mongo_document(item) for item in doc]
+    elif isinstance(doc, dict):
+        new_doc = {}
+        for k, v in doc.items():
+            if isinstance(v, ObjectId):
+                new_doc[k] = str(v)
+            elif isinstance(v, (dict, list)):
+                new_doc[k] = serialize_mongo_document(v)
+            else:
+                new_doc[k] = v
+        return new_doc
+    else:
         return doc
-    doc["_id"] = str(doc["_id"])
-    return doc
 
 @api_router.get("/pickup-requests")
 async def get_pickup_requests(current_user: dict = Depends(get_current_user)):
@@ -457,11 +479,10 @@ async def get_pickup_requests(current_user: dict = Depends(get_current_user)):
     else:
         requests = await db.pickup_requests.find().to_list(1000)
 
-    # Convert all ObjectIds to strings
-    serialized_requests = [serialize_mongo_document(r) for r in requests]
-
-    return {"count": len(serialized_requests), "requests": serialized_requests}
-
+    return {
+        "count": len(requests),
+        "requests": serialize_mongo_document(requests)
+    }
 # Vehicle Tracking
 @api_router.post("/tracking/location")
 async def update_vehicle_location(location_data: dict, current_user: dict = Depends(get_current_user)):
@@ -490,17 +511,14 @@ async def update_vehicle_location(location_data: dict, current_user: dict = Depe
 
 @api_router.get("/tracking/vehicles")
 async def get_vehicle_locations(current_user: dict = Depends(get_current_user)):
-    # Get latest location for each vehicle
     pipeline = [
         {"$sort": {"timestamp": -1}},
-        {"$group": {
-            "_id": "$vehicle_id",
-            "latest_location": {"$first": "$$ROOT"}
-        }}
+        {"$group": {"_id": "$vehicle_id", "latest_location": {"$first": "$$ROOT"}}}
     ]
     
     locations = await db.vehicle_locations.aggregate(pipeline).to_list(1000)
-    return [loc["latest_location"] for loc in locations]
+    return serialize_mongo_document([loc["latest_location"] for loc in locations])  # ✅ FIX
+
 
 # Analytics Routes (Admin only)
 @api_router.get("/analytics/overview")
@@ -573,14 +591,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 # Include router
 app.include_router(api_router)
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Configure logging
 logging.basicConfig(

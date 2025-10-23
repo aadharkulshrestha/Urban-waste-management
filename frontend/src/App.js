@@ -10,6 +10,7 @@ import AuthPage from './components/AuthPage';
 import CitizenDashboard from './components/CitizenDashboard';
 import WorkerDashboard from './components/WorkerDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import "leaflet/dist/leaflet.css";
 
 // API Configuration
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;

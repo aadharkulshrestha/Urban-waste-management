@@ -1,20 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
+import React, { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { 
-  Route, 
-  MapPin, 
-  Clock, 
-  CheckCircle, 
-  AlertTriangle, 
-  LogOut, 
-  User, 
-  Navigation,
+import {
+  Route,
+  MapPin,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  LogOut,
+  User,
   Truck,
   ClipboardCheck,
   Shield,
@@ -22,10 +27,12 @@ import {
   Square,
   Recycle,
   FileText,
-  Calendar
-} from 'lucide-react';
-import { useAuth } from '../App';
-import { toast } from 'sonner';
+  Calendar,
+} from "lucide-react";
+import { useAuth } from "../App";
+import { toast } from "sonner";
+import { Navigation } from "lucide-react";
+import MapView from "./MapView";
 
 const WorkerDashboard = () => {
   const { user, logout } = useAuth();
@@ -38,15 +45,15 @@ const WorkerDashboard = () => {
     safety_gear: false,
     vehicle_inspection: false,
     equipment_check: false,
-    route_reviewed: false
+    route_reviewed: false,
   });
   const [locationTracking, setLocationTracking] = useState(false);
 
   const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
-  
+
   const getAuthHeaders = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-    'Content-Type': 'application/json'
+    Authorization: `Bearer ${localStorage.getItem("token")}`,
+    "Content-Type": "application/json",
   });
 
   useEffect(() => {
@@ -57,25 +64,25 @@ const WorkerDashboard = () => {
     try {
       setLoading(true);
       const headers = getAuthHeaders();
-      
+
       const [routesRes, complaintsRes, binsRes] = await Promise.all([
         fetch(`${API_BASE}/routes`, { headers }),
         fetch(`${API_BASE}/complaints`, { headers }),
-        fetch(`${API_BASE}/bins`, { headers })
+        fetch(`${API_BASE}/bins`, { headers }),
       ]);
 
       if (routesRes.ok) {
         const routesData = await routesRes.json();
         setRoutes(routesData);
         // Find active route
-        const active = routesData.find(r => r.status === 'in_progress');
+        const active = routesData.find((r) => r.status === "in_progress");
         setActiveRoute(active);
       }
       if (complaintsRes.ok) setComplaints(await complaintsRes.json());
       if (binsRes.ok) setBins(await binsRes.json());
     } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Failed to load dashboard data');
+      console.error("Error fetching data:", error);
+      toast.error("Failed to load dashboard data");
     } finally {
       setLoading(false);
     }
@@ -84,21 +91,21 @@ const WorkerDashboard = () => {
   const startRoute = async (routeId) => {
     try {
       const response = await fetch(`${API_BASE}/routes/${routeId}/start`, {
-        method: 'PUT',
-        headers: getAuthHeaders()
+        method: "PUT",
+        headers: getAuthHeaders(),
       });
 
       if (response.ok) {
-        toast.success('Route started successfully!');
+        toast.success("Route started successfully!");
         setLocationTracking(true);
         fetchData();
         startLocationTracking();
       } else {
-        throw new Error('Failed to start route');
+        throw new Error("Failed to start route");
       }
     } catch (error) {
-      console.error('Error starting route:', error);
-      toast.error('Failed to start route');
+      console.error("Error starting route:", error);
+      toast.error("Failed to start route");
     }
   };
 
@@ -127,72 +134,78 @@ const WorkerDashboard = () => {
   const updateLocation = async (latitude, longitude) => {
     try {
       await fetch(`${API_BASE}/tracking/location`, {
-        method: 'POST',
+        method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
           latitude,
           longitude,
-          timestamp: new Date().toISOString()
-        })
+          timestamp: new Date().toISOString(),
+        }),
       });
     } catch (error) {
-      console.error('Error updating location:', error);
+      console.error("Error updating location:", error);
     }
   };
 
   const updateBinStatus = async (binId, status, fillLevel) => {
     try {
       const response = await fetch(`${API_BASE}/bins/${binId}/status`, {
-        method: 'PUT',
+        method: "PUT",
         headers: getAuthHeaders(),
         body: JSON.stringify({
           status,
-          fill_level: fillLevel
-        })
+          fill_level: fillLevel,
+        }),
       });
 
       if (response.ok) {
-        toast.success('Bin status updated successfully!');
+        toast.success("Bin status updated successfully!");
         fetchData();
       } else {
-        throw new Error('Failed to update bin status');
+        throw new Error("Failed to update bin status");
       }
     } catch (error) {
-      console.error('Error updating bin status:', error);
-      toast.error('Failed to update bin status');
+      console.error("Error updating bin status:", error);
+      toast.error("Failed to update bin status");
     }
   };
 
   const updateComplaintStatus = async (complaintId, status) => {
     try {
-      const response = await fetch(`${API_BASE}/complaints/${complaintId}/status`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ status })
-      });
+      const response = await fetch(
+        `${API_BASE}/complaints/${complaintId}/status`,
+        {
+          method: "PUT",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ status }),
+        }
+      );
 
       if (response.ok) {
-        toast.success('Complaint status updated successfully!');
+        toast.success("Complaint status updated successfully!");
         fetchData();
       } else {
-        throw new Error('Failed to update complaint status');
+        throw new Error("Failed to update complaint status");
       }
     } catch (error) {
-      console.error('Error updating complaint status:', error);
-      toast.error('Failed to update complaint status');
+      console.error("Error updating complaint status:", error);
+      toast.error("Failed to update complaint status");
     }
   };
 
   const checklistItems = [
-    { key: 'safety_gear', label: 'Safety gear equipped (gloves, vest, helmet)' },
-    { key: 'vehicle_inspection', label: 'Vehicle safety inspection completed' },
-    { key: 'equipment_check', label: 'Collection equipment checked and ready' },
-    { key: 'route_reviewed', label: 'Daily route reviewed and understood' }
+    {
+      key: "safety_gear",
+      label: "Safety gear equipped (gloves, vest, helmet)",
+    },
+    { key: "vehicle_inspection", label: "Vehicle safety inspection completed" },
+    { key: "equipment_check", label: "Collection equipment checked and ready" },
+    { key: "route_reviewed", label: "Daily route reviewed and understood" },
   ];
 
   const isChecklistComplete = Object.values(checklist).every(Boolean);
-  const openComplaints = complaints.filter(c => c.status === 'open');
-  const myRoutes = routes.filter(r => r.worker_id === user.id);
+  const openComplaints = complaints.filter((c) => c.status === "open");
+  const myRoutes = routes.filter((r) => r.worker_id === user.id);
 
   if (loading) {
     return (
@@ -203,7 +216,10 @@ const WorkerDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50" data-testid="worker-dashboard">
+    <div
+      className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50"
+      data-testid="worker-dashboard"
+    >
       {/* Header */}
       <header className="bg-white/90 backdrop-blur-sm shadow-sm border-b border-teal-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -213,7 +229,9 @@ const WorkerDashboard = () => {
                 <Truck className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">CleanCity Connect</h1>
+                <h1 className="text-2xl font-bold text-slate-900">
+                  CleanCity Connect
+                </h1>
                 <p className="text-sm text-slate-600">Worker Dashboard</p>
               </div>
             </div>
@@ -228,9 +246,9 @@ const WorkerDashboard = () => {
                 <User className="h-3 w-3 mr-1" />
                 {user.name}
               </Badge>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={logout}
                 data-testid="logout-btn"
               >
@@ -251,13 +269,17 @@ const WorkerDashboard = () => {
                   <Route className="h-6 w-6 text-teal-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-slate-600">My Routes</p>
-                  <p className="text-2xl font-bold text-slate-900">{myRoutes.length}</p>
+                  <p className="text-sm font-medium text-slate-600">
+                    My Routes
+                  </p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {myRoutes.length}
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="border-0 shadow-lg">
             <CardContent className="p-6">
               <div className="flex items-center space-x-3">
@@ -265,13 +287,17 @@ const WorkerDashboard = () => {
                   <FileText className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-slate-600">Open Issues</p>
-                  <p className="text-2xl font-bold text-slate-900">{openComplaints.length}</p>
+                  <p className="text-sm font-medium text-slate-600">
+                    Open Issues
+                  </p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {openComplaints.length}
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="border-0 shadow-lg">
             <CardContent className="p-6">
               <div className="flex items-center space-x-3">
@@ -279,13 +305,17 @@ const WorkerDashboard = () => {
                   <Recycle className="h-6 w-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-slate-600">Bins to Collect</p>
-                  <p className="text-2xl font-bold text-slate-900">{bins.filter(b => b.fill_level > 70).length}</p>
+                  <p className="text-sm font-medium text-slate-600">
+                    Bins to Collect
+                  </p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {bins.filter((b) => b.fill_level > 70).length}
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="border-0 shadow-lg">
             <CardContent className="p-6">
               <div className="flex items-center space-x-3">
@@ -293,9 +323,11 @@ const WorkerDashboard = () => {
                   <Clock className="h-6 w-6 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-slate-600">Active Route</p>
+                  <p className="text-sm font-medium text-slate-600">
+                    Active Route
+                  </p>
                   <p className="text-lg font-bold text-slate-900">
-                    {activeRoute ? 'In Progress' : 'None'}
+                    {activeRoute ? "In Progress" : "None"}
                   </p>
                 </div>
               </div>
@@ -324,8 +356,8 @@ const WorkerDashboard = () => {
                   <Checkbox
                     id={item.key}
                     checked={checklist[item.key]}
-                    onCheckedChange={(checked) => 
-                      setChecklist(prev => ({...prev, [item.key]: checked}))
+                    onCheckedChange={(checked) =>
+                      setChecklist((prev) => ({ ...prev, [item.key]: checked }))
                     }
                     data-testid={`checklist-${item.key}`}
                   />
@@ -351,10 +383,18 @@ const WorkerDashboard = () => {
         {/* Main Content Tabs */}
         <Tabs defaultValue="routes" className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="routes" data-testid="routes-tab">My Routes</TabsTrigger>
-            <TabsTrigger value="collection" data-testid="collection-tab">Collection</TabsTrigger>
-            <TabsTrigger value="issues" data-testid="issues-tab">Issues</TabsTrigger>
-            <TabsTrigger value="navigation" data-testid="navigation-tab">Navigation</TabsTrigger>
+            <TabsTrigger value="routes" data-testid="routes-tab">
+              My Routes
+            </TabsTrigger>
+            <TabsTrigger value="collection" data-testid="collection-tab">
+              Collection
+            </TabsTrigger>
+            <TabsTrigger value="issues" data-testid="issues-tab">
+              Issues
+            </TabsTrigger>
+            <TabsTrigger value="navigation" data-testid="navigation-tab">
+              Navigation
+            </TabsTrigger>
           </TabsList>
 
           {/* Routes Tab */}
@@ -372,26 +412,46 @@ const WorkerDashboard = () => {
                 ) : (
                   <div className="space-y-4">
                     {myRoutes.map((route) => (
-                      <div key={route.id} className="p-6 border border-slate-200 rounded-lg space-y-4">
+                      <div
+                        key={route.id}
+                        className="p-6 border border-slate-200 rounded-lg space-y-4"
+                      >
                         <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="font-semibold text-lg text-slate-900">{route.route_name}</h3>
+                            <h3 className="font-semibold text-lg text-slate-900">
+                              {route.route_name}
+                            </h3>
                             <p className="text-sm text-slate-600">
-                              {route.bin_ids?.length || 0} collection points • Est. {route.estimated_duration} minutes
+                              {route.bin_ids?.length || 0} collection points •
+                              Est. {route.estimated_duration} minutes
                             </p>
                           </div>
-                          <Badge className={`
-                            ${route.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : ''}
-                            ${route.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : ''}
-                            ${route.status === 'completed' ? 'bg-green-100 text-green-700' : ''}
-                          `}>
-                            {route.status.replace('_', ' ')}
+                          <Badge
+                            className={`
+                            ${
+                              route.status === "pending"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : ""
+                            }
+                            ${
+                              route.status === "in_progress"
+                                ? "bg-blue-100 text-blue-700"
+                                : ""
+                            }
+                            ${
+                              route.status === "completed"
+                                ? "bg-green-100 text-green-700"
+                                : ""
+                            }
+                          `}
+                          >
+                            {route.status.replace("_", " ")}
                           </Badge>
                         </div>
-                        
-                        {route.status === 'pending' && (
+
+                        {route.status === "pending" && (
                           <div className="flex items-center space-x-4">
-                            <Button 
+                            <Button
                               onClick={() => startRoute(route.id)}
                               disabled={!isChecklistComplete}
                               className="bg-teal-600 hover:bg-teal-700"
@@ -407,15 +467,22 @@ const WorkerDashboard = () => {
                             )}
                           </div>
                         )}
-                        
-                        {route.status === 'in_progress' && (
+
+                        {route.status === "in_progress" && (
                           <div className="bg-blue-50 p-4 rounded-lg">
                             <div className="flex items-center space-x-2 mb-2">
                               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                              <p className="text-blue-800 font-medium">Route in progress</p>
+                              <p className="text-blue-800 font-medium">
+                                Route in progress
+                              </p>
                             </div>
                             <p className="text-sm text-blue-600">
-                              Started: {route.start_time ? new Date(route.start_time).toLocaleTimeString() : 'N/A'}
+                              Started:{" "}
+                              {route.start_time
+                                ? new Date(
+                                    route.start_time
+                                  ).toLocaleTimeString()
+                                : "N/A"}
                             </p>
                           </div>
                         )}
@@ -435,53 +502,77 @@ const WorkerDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {bins.filter(bin => bin.fill_level > 50).map((bin) => (
-                    <div key={bin.id} className="p-4 border border-slate-200 rounded-lg">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h3 className="font-medium text-slate-900">{bin.location_name}</h3>
-                          <p className="text-sm text-slate-600">{bin.zone}</p>
+                  {bins
+                    .filter((bin) => bin.fill_level > 50)
+                    .map((bin) => (
+                      <div
+                        key={bin.id}
+                        className="p-4 border border-slate-200 rounded-lg"
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="font-medium text-slate-900">
+                              {bin.location_name}
+                            </h3>
+                            <p className="text-sm text-slate-600">{bin.zone}</p>
+                          </div>
+                          <Badge
+                            className={`
+                          ${
+                            bin.fill_level <= 25
+                              ? "bg-green-100 text-green-700"
+                              : ""
+                          }
+                          ${
+                            bin.fill_level > 25 && bin.fill_level <= 75
+                              ? "bg-yellow-100 text-yellow-700"
+                              : ""
+                          }
+                          ${
+                            bin.fill_level > 75 ? "bg-red-100 text-red-700" : ""
+                          }
+                        `}
+                          >
+                            {bin.fill_level}% full
+                          </Badge>
                         </div>
-                        <Badge className={`
-                          ${bin.fill_level <= 25 ? 'bg-green-100 text-green-700' : ''}
-                          ${bin.fill_level > 25 && bin.fill_level <= 75 ? 'bg-yellow-100 text-yellow-700' : ''}
-                          ${bin.fill_level > 75 ? 'bg-red-100 text-red-700' : ''}
-                        `}>
-                          {bin.fill_level}% full
-                        </Badge>
+
+                        <div className="w-full bg-slate-200 rounded-full h-3 mb-4">
+                          <div
+                            className={`h-3 rounded-full ${
+                              bin.fill_level <= 25
+                                ? "bg-green-500"
+                                : bin.fill_level <= 75
+                                ? "bg-yellow-500"
+                                : "bg-red-500"
+                            }`}
+                            style={{ width: `${bin.fill_level}%` }}
+                          ></div>
+                        </div>
+
+                        <div className="flex space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateBinStatus(bin.id, "empty", 0)}
+                            data-testid={`mark-collected-${bin.id}`}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Mark Collected
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              updateBinStatus(bin.id, "overflowing", 100)
+                            }
+                          >
+                            <AlertTriangle className="h-4 w-4 mr-1" />
+                            Report Issue
+                          </Button>
+                        </div>
                       </div>
-                      
-                      <div className="w-full bg-slate-200 rounded-full h-3 mb-4">
-                        <div 
-                          className={`h-3 rounded-full ${
-                            bin.fill_level <= 25 ? 'bg-green-500' :
-                            bin.fill_level <= 75 ? 'bg-yellow-500' : 'bg-red-500'
-                          }`}
-                          style={{width: `${bin.fill_level}%`}}
-                        ></div>
-                      </div>
-                      
-                      <div className="flex space-x-2">
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => updateBinStatus(bin.id, 'empty', 0)}
-                          data-testid={`mark-collected-${bin.id}`}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Mark Collected
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => updateBinStatus(bin.id, 'overflowing', 100)}
-                        >
-                          <AlertTriangle className="h-4 w-4 mr-1" />
-                          Report Issue
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </CardContent>
             </Card>
@@ -497,40 +588,70 @@ const WorkerDashboard = () => {
                 {openComplaints.length === 0 ? (
                   <div className="text-center py-8">
                     <CheckCircle className="h-12 w-12 text-green-400 mx-auto mb-4" />
-                    <p className="text-slate-600">No open issues in your area</p>
+                    <p className="text-slate-600">
+                      No open issues in your area
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {openComplaints.map((complaint) => (
-                      <div key={complaint.id} className="p-4 border border-slate-200 rounded-lg">
+                      <div
+                        key={complaint.id}
+                        className="p-4 border border-slate-200 rounded-lg"
+                      >
                         <div className="flex justify-between items-start mb-2">
-                          <h3 className="font-medium text-slate-900">{complaint.title}</h3>
-                          <Badge className={`
-                            ${complaint.priority === 'low' ? 'bg-green-100 text-green-700' : ''}
-                            ${complaint.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : ''}
-                            ${complaint.priority === 'high' ? 'bg-red-100 text-red-700' : ''}
-                          `}>
+                          <h3 className="font-medium text-slate-900">
+                            {complaint.title}
+                          </h3>
+                          <Badge
+                            className={`
+                            ${
+                              complaint.priority === "low"
+                                ? "bg-green-100 text-green-700"
+                                : ""
+                            }
+                            ${
+                              complaint.priority === "medium"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : ""
+                            }
+                            ${
+                              complaint.priority === "high"
+                                ? "bg-red-100 text-red-700"
+                                : ""
+                            }
+                          `}
+                          >
                             {complaint.priority} priority
                           </Badge>
                         </div>
-                        <p className="text-sm text-slate-600 mb-3">{complaint.description}</p>
+                        <p className="text-sm text-slate-600 mb-3">
+                          {complaint.description}
+                        </p>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center text-xs text-slate-500">
                             <MapPin className="h-3 w-3 mr-1" />
                             {complaint.address}
                           </div>
                           <div className="flex space-x-2">
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               variant="outline"
-                              onClick={() => updateComplaintStatus(complaint.id, 'in_progress')}
+                              onClick={() =>
+                                updateComplaintStatus(
+                                  complaint.id,
+                                  "in_progress"
+                                )
+                              }
                               data-testid={`take-issue-${complaint.id}`}
                             >
                               Take Issue
                             </Button>
-                            <Button 
-                              size="sm" 
-                              onClick={() => updateComplaintStatus(complaint.id, 'resolved')}
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                updateComplaintStatus(complaint.id, "resolved")
+                              }
                             >
                               Mark Resolved
                             </Button>
@@ -556,38 +677,56 @@ const WorkerDashboard = () => {
               <CardContent>
                 <div className="space-y-6">
                   <div className="bg-teal-50 p-4 rounded-lg">
-                    <p className="text-sm text-teal-600 mb-2">🗺️ Interactive Navigation (Mock Implementation)</p>
-                    <div className="bg-teal-100 p-6 rounded-lg text-center">
-                      <Navigation className="h-8 w-8 text-teal-600 mx-auto mb-2" />
-                      <p className="text-teal-700 font-medium">GPS Navigation View</p>
-                      <p className="text-sm text-teal-600 mt-2">
-                        This would show turn-by-turn navigation with Google Maps integration
-                      </p>
+                    <p className="text-sm text-teal-600 mb-2">
+                      🗺️ Live GPS Navigation
+                    </p>
+
+                    <div className="bg-white p-2 rounded-lg shadow-inner">
+                      <MapView />
                     </div>
+
+                    <p className="text-sm text-teal-600 mt-2 text-center">
+                      Real-time tracking using Leaflet and Geolocation API
+                    </p>
                   </div>
 
                   {activeRoute ? (
                     <div className="space-y-4">
-                      <h3 className="font-medium text-slate-900">Current Route: {activeRoute.route_name}</h3>
+                      <h3 className="font-medium text-slate-900">
+                        Current Route: {activeRoute.route_name}
+                      </h3>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="p-4 bg-slate-50 rounded-lg">
-                          <p className="text-sm font-medium text-slate-600 mb-1">Progress</p>
-                          <p className="text-2xl font-bold text-slate-900">3/8 stops</p>
+                          <p className="text-sm font-medium text-slate-600 mb-1">
+                            Progress
+                          </p>
+                          <p className="text-2xl font-bold text-slate-900">
+                            3/8 stops
+                          </p>
                         </div>
+
                         <div className="p-4 bg-slate-50 rounded-lg">
-                          <p className="text-sm font-medium text-slate-600 mb-1">Next Stop</p>
-                          <p className="font-medium text-slate-900">Downtown Bin #12</p>
+                          <p className="text-sm font-medium text-slate-600 mb-1">
+                            Next Stop
+                          </p>
+                          <p className="font-medium text-slate-900">
+                            Downtown Bin #12
+                          </p>
                         </div>
                       </div>
-                      
+
                       {locationTracking && (
                         <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                           <div className="flex items-center space-x-2">
                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                            <p className="text-green-800 font-medium">GPS tracking active</p>
+                            <p className="text-green-800 font-medium">
+                              GPS tracking active
+                            </p>
                           </div>
                           <p className="text-sm text-green-600 mt-1">
-                            Your location is being shared with dispatch for real-time monitoring
+                            Your live location is being shared with dispatch in
+                            real time
                           </p>
                         </div>
                       )}
@@ -595,7 +734,9 @@ const WorkerDashboard = () => {
                   ) : (
                     <div className="text-center py-8">
                       <Navigation className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-                      <p className="text-slate-600">Start a route to begin navigation</p>
+                      <p className="text-slate-600">
+                        Start a route to begin navigation
+                      </p>
                     </div>
                   )}
                 </div>

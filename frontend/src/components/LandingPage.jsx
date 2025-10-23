@@ -151,7 +151,7 @@ const LandingPage = () => {
             <div className="relative">
               <div className="relative z-10">
                 <img 
-                  src="https://images.unsplash.com/photo-1498084393753-b411b2d26b34?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHwyfHxzbWFydCUyMGNpdHl8ZW58MHx8fHwxNzU5ODUxMzQzfDA&ixlib=rb-4.1.0&q=85" 
+                  src="dashboardimg.png" 
                   alt="Smart City Technology"
                   className="rounded-3xl shadow-2xl w-full h-96 object-cover"
                 />

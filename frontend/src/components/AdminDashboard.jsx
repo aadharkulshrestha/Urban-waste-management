@@ -30,6 +30,9 @@ import {
 import { useAuth } from '../App';
 import { toast } from 'sonner';
 
+import { Navigation } from "lucide-react";
+import MapView from "./MapView";
+
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const [analytics, setAnalytics] = useState({});

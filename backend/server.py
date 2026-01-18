@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from pathlib import Path
 from bson import ObjectId 
@@ -211,7 +211,7 @@ def create_jwt_token(user_id: str, role: str) -> str:
     payload = {
         'user_id': user_id,
         'role': role,
-        'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+        'exp': datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -297,6 +297,20 @@ async def login_user(login_data: UserLogin):
     }
 
 # User Routes
+@api_router.get("/users/workers")
+async def get_workers(current_user: dict = Depends(get_current_user)):
+    # Only Admin can fetch workers
+    if current_user['role'] != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admins can fetch workers")
+
+    workers = await db.users.find({"role": UserRole.WORKER}).to_list(1000)
+
+    # Remove password fields
+    for worker in workers:
+        worker.pop("password", None)
+
+    return serialize_mongo_document(workers)
+
 @api_router.get("/users/profile")
 async def get_user_profile(current_user: dict = Depends(get_current_user)):
     user = await db.users.find_one({"id": current_user['user_id']})
@@ -320,6 +334,50 @@ async def update_user_profile(user_data: dict, current_user: dict = Depends(get_
     return {"message": "Profile updated successfully"}
 
 # Waste Bin Routes
+
+class IoTBinUpdate(BaseModel):
+    bin_id: str
+    distance: int
+    fill_percentage: int
+    device_id: str = "esp32_001"
+
+
+@api_router.post("/iot/bin-update")
+async def iot_bin_update(data: IoTBinUpdate):
+    if data.fill_percentage < 25:
+        status = BinStatus.EMPTY
+    elif data.fill_percentage < 50:
+        status = BinStatus.QUARTER
+    elif data.fill_percentage < 75:
+        status = BinStatus.HALF
+    elif data.fill_percentage < 95:
+        status = BinStatus.FULL
+    else:
+        status = BinStatus.OVERFLOWING
+
+    update_data = {
+        "fill_level": data.fill_percentage,
+        "status": status,
+        "last_updated": datetime.now(timezone.utc)
+    }
+
+    result = await db.bins.update_one(
+        {"id": data.bin_id},
+        {"$set": update_data}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Bin not found")
+
+    await manager.broadcast(json.dumps({
+        "type": "bin_update",
+        "bin_id": data.bin_id,
+        "data": update_data
+    }, default=json_util.default))
+
+    return {"message": "Bin updated successfully"}
+
+
 @api_router.get("/bins")
 async def get_all_bins(current_user: dict = Depends(get_current_user)):
     bins = await db.bins.find().to_list(1000)
@@ -342,11 +400,11 @@ async def update_bin_status(bin_id: str, status_data: dict, current_user: dict =
     update_data = {
         "status": status_data.get('status'),
         "fill_level": status_data.get('fill_level', 0),
-        "last_updated": datetime.utcnow()
+        "last_updated": datetime.now(timezone.utc)
     }
     
     if current_user['role'] == UserRole.WORKER:
-        update_data["last_collected"] = datetime.utcnow()
+        update_data["last_collected"] = datetime.now(timezone.utc)
     
     await db.bins.update_one({"id": bin_id}, {"$set": update_data})
     
@@ -358,6 +416,8 @@ async def update_bin_status(bin_id: str, status_data: dict, current_user: dict =
 }, default=json_util.default))
     
     return {"message": "Bin status updated successfully"}
+
+
 
 # Complaint Routes
 @api_router.post("/complaints")
@@ -397,7 +457,7 @@ async def update_complaint_status(complaint_id: str, status_data: dict, current_
     }
     
     if status_data['status'] in [ComplaintStatus.RESOLVED, ComplaintStatus.CLOSED]:
-        update_data["resolved_at"] = datetime.utcnow()
+        update_data["resolved_at"] = datetime.now(timezone.utc)
     
     await db.complaints.update_one({"id": complaint_id}, {"$set": update_data})
     return {"message": "Complaint status updated successfully"}
@@ -431,13 +491,17 @@ async def start_route(route_id: str, current_user: dict = Depends(get_current_us
     route = await db.routes.find_one({"id": route_id, "worker_id": current_user['user_id']})
     if not route:
         raise HTTPException(status_code=404, detail="Route not found or not assigned to you")
-    
+
+    from datetime import datetime, timezone, timedelta
+    IST = timezone(timedelta(hours=5, minutes=30))
+
     await db.routes.update_one(
         {"id": route_id},
-        {"$set": {"status": RouteStatus.IN_PROGRESS, "start_time": datetime.utcnow()}}
+        {"$set": {"status": RouteStatus.IN_PROGRESS, "start_time": datetime.now(IST)}}
     )
     
     return {"message": "Route started successfully"}
+
 
 # Pickup Requests
 @api_router.post("/pickup-requests")
@@ -454,21 +518,21 @@ async def create_pickup_request(request_data: dict, current_user: dict = Depends
     return {"message": "Pickup request submitted successfully", "request_id": pickup_obj.id}
 
 def serialize_mongo_document(doc):
-    """Recursively converts MongoDB ObjectIds to strings (supports nested dicts/lists)."""
-    if isinstance(doc, list):
-        return [serialize_mongo_document(item) for item in doc]
-    elif isinstance(doc, dict):
-        new_doc = {}
-        for k, v in doc.items():
-            if isinstance(v, ObjectId):
-                new_doc[k] = str(v)
-            elif isinstance(v, (dict, list)):
-                new_doc[k] = serialize_mongo_document(v)
-            else:
-                new_doc[k] = v
-        return new_doc
-    else:
-        return doc
+    from datetime import datetime, timezone
+
+    def convert(value):
+        if isinstance(value, ObjectId):
+            return str(value)
+        if isinstance(value, datetime):
+            # Convert to UTC ISO format with Z
+            return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        if isinstance(value, list):
+            return [convert(i) for i in value]
+        if isinstance(value, dict):
+            return {k: convert(v) for k, v in value.items()}
+        return value
+
+    return convert(doc)
 
 @api_router.get("/pickup-requests")
 async def get_pickup_requests(current_user: dict = Depends(get_current_user)):

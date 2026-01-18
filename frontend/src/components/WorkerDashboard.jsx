@@ -476,13 +476,19 @@ const WorkerDashboard = () => {
                                 Route in progress
                               </p>
                             </div>
-                            <p className="text-sm text-blue-600">
-                              Started:{" "}
-                              {route.start_time
+                            <p>
+                              Started{" "}
+                              {/* {route.start_time
                                 ? new Date(
-                                    route.start_time
-                                  ).toLocaleTimeString()
-                                : "N/A"}
+                                    typeof route.start_time === "string"
+                                      ? route.start_time
+                                      : route.start_time.$date
+                                  ).toLocaleTimeString("en-IN", {
+                                    hour12: true,
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : "N/A"} */}
                             </p>
                           </div>
                         )}

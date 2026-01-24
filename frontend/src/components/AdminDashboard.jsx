@@ -68,6 +68,13 @@ const AdminDashboard = () => {
     estimated_duration: 240,
   });
 
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraBin, setCameraBin] = useState(null);
+  const [cameraResult, setCameraResult] = useState(null);
+  const [reuseResult, setReuseResult] = useState(null);
+  const [cameraImgUrl, setCameraImgUrl] = useState(null);
+  const [cameraKey, setCameraKey] = useState(0);
+
   const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
   const getAuthHeaders = () => ({
@@ -234,12 +241,12 @@ const AdminDashboard = () => {
         fillLevel <= 25
           ? "empty"
           : fillLevel <= 50
-          ? "quarter"
-          : fillLevel <= 75
-          ? "half"
-          : fillLevel <= 90
-          ? "three_quarter"
-          : "full";
+            ? "quarter"
+            : fillLevel <= 75
+              ? "half"
+              : fillLevel <= 90
+                ? "three_quarter"
+                : "full";
 
       const response = await fetch(`${API_BASE}/bins/${binId}/status`, {
         method: "PUT",
@@ -257,6 +264,27 @@ const AdminDashboard = () => {
     }
   };
 
+  const CAMERA_URL = `${process.env.CAMERA_URL}`;
+
+  const checkWaste = async (bin) => {
+    setCameraBin(bin);
+    setReuseResult(null);
+
+    const res = await fetch(`${API_BASE}/camera/violation`, {
+      method: "POST",
+    });
+
+    const data = await res.json();
+    setCameraResult(data);
+    setCameraOpen(true);
+  };
+
+  const getReuseSuggestion = async () => {
+    const res = await fetch(`${API_BASE}/camera/reuse`);
+    const data = await res.json();
+    setReuseResult(data);
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case "open":
@@ -270,6 +298,27 @@ const AdminDashboard = () => {
       default:
         return "bg-gray-100 text-gray-700";
     }
+  };
+
+  const refreshBins = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/bins`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (!res.ok) throw new Error("Failed");
+
+      const data = await res.json();
+      setBins(data);
+      toast.success("Bin data refreshed");
+    } catch (err) {
+      toast.error("Failed to refresh bin data");
+      console.error(err);
+    }
+  };
+
+  const refreshCamera = () => {
+    setCameraImgUrl(`${CAMERA_URL}?t=${Date.now()}`);
   };
 
   const zones = ["Zone A", "Zone B", "Zone C", "Zone D"];
@@ -634,6 +683,13 @@ const AdminDashboard = () => {
                 <h2 className="text-2xl font-bold text-slate-900">
                   Bin Management
                 </h2>
+                <Button
+                  variant="outline"
+                  onClick={refreshBins}
+                  className="border-blue-500 text-blue-600 hover:bg-blue-50"
+                >
+                  🔄 Refresh Bin Data
+                </Button>
                 <Dialog open={showBinForm} onOpenChange={setShowBinForm}>
                   <DialogTrigger asChild>
                     <Button
@@ -752,8 +808,8 @@ const AdminDashboard = () => {
                                       bin.fill_level <= 25
                                         ? "bg-green-500"
                                         : bin.fill_level <= 75
-                                        ? "bg-yellow-500"
-                                        : "bg-red-500"
+                                          ? "bg-yellow-500"
+                                          : "bg-red-500"
                                     }`}
                                     style={{ width: `${bin.fill_level}%` }}
                                   ></div>
@@ -787,15 +843,15 @@ const AdminDashboard = () => {
                               </Badge>
                             </td>
                             <td className="p-4">
-                              <div className="flex space-x-1">
+                              <div className="flex flex-wrap gap-5">
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   onClick={() => updateBinFillLevel(bin.id, 0)}
-                                  data-testid={`empty-bin-${bin.id}`}
                                 >
                                   Empty
                                 </Button>
+
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -804,6 +860,14 @@ const AdminDashboard = () => {
                                   }
                                 >
                                   Fill
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  className="bg-purple-600 text-white hover:bg-purple-700"
+                                  onClick={() => checkWaste(bin)}
+                                >
+                                  📷 Check Waste
                                 </Button>
                               </div>
                             </td>
@@ -948,7 +1012,7 @@ const AdminDashboard = () => {
                               <p>
                                 Started:{" "}
                                 {new Date(
-                                  route.start_time
+                                  route.start_time,
                                 ).toLocaleTimeString()}
                               </p>
                             )}
@@ -1026,7 +1090,7 @@ const AdminDashboard = () => {
                             <span className="flex items-center">
                               <Clock className="h-3 w-3 mr-1" />
                               {new Date(
-                                complaint.created_at
+                                complaint.created_at,
                               ).toLocaleDateString()}
                             </span>
                           </div>
@@ -1138,6 +1202,56 @@ const AdminDashboard = () => {
               </Card>
             </div>
           </TabsContent>
+          <Dialog open={cameraOpen} onOpenChange={setCameraOpen}>
+            <DialogContent className="max-w-xl w-full">
+              <DialogHeader>
+                <DialogTitle>
+                  Smart Camera – {cameraBin?.location_name}
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="w-full max-w-[640px] mx-auto aspect-[4/3] bg-black rounded overflow-hidden">
+                <iframe
+                  key={cameraKey}
+                  src="http://192.168.137.142:8080/video"
+                  className="w-full h-full transform rotate-360 scale-110 origin-center border-0"
+                  title="Smart Camera"
+                />
+              </div>
+
+              {cameraResult && (
+                <div className="mt-4 p-3 rounded bg-slate-50">
+                  <p className="font-medium">{cameraResult.message}</p>
+                  {cameraResult.warning && (
+                    <p className="text-red-600 mt-1">⚠️ Violation Detected</p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-between mt-4">
+                <Button variant="outline" onClick={getReuseSuggestion}>
+                  ♻️ Reuse Suggestion
+                </Button>
+
+                <Button onClick={() => setCameraKey((k) => k + 1)}>
+                  🔄 Refresh Camera
+                </Button>
+
+                <Button onClick={() => setCameraOpen(false)}>Close</Button>
+              </div>
+
+              {reuseResult && (
+                <div className="mt-3 bg-green-50 p-3 rounded">
+                  <p className="font-medium">Reuse Ideas:</p>
+                  <ul className="list-disc ml-5 text-sm">
+                    {reuseResult.suggestions.map((i, idx) => (
+                      <li key={idx}>{i}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </Tabs>
       </main>
     </div>

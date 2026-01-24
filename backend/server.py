@@ -20,6 +20,10 @@ import random
 from enum import Enum
 import logging
 from bson import json_util
+import requests
+from PIL import Image
+from io import BytesIO
+
 
 # Load environment variables
 ROOT_DIR = Path(__file__).parent
@@ -173,6 +177,13 @@ class PickupRequest(BaseModel):
     status: str = "requested"  # requested, scheduled, completed, cancelled
     special_instructions: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+class ViolationEvent(BaseModel):
+    bin_id: str
+    expected_type: str   # biodegradable
+    detected_type: str   # plastic
+    camera_id: str = "cam_01"
+
 
 # WebSocket Connection Manager
 class ConnectionManager:
@@ -201,6 +212,27 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # Utility Functions
+
+def get_camera_image():
+    CAMERA_URL = os.environ.get("CAMERA_URL") 
+    try:
+        resp = requests.get(
+            CAMERA_URL,
+            timeout=15,
+            headers={"Connection": "close"}
+        )
+        if resp.status_code != 200:
+            raise Exception("Camera not responding")
+
+        return resp.content
+
+    except Exception as e:
+        print("Camera error:", e)
+        raise HTTPException(
+            status_code=503,
+            detail="Camera not reachable. Please try again."
+        )
+
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -639,6 +671,59 @@ async def initialize_mock_data(current_user: dict = Depends(get_current_user)):
     await db.bins.insert_many(mock_bins)
     
     return {"message": f"Initialized {len(mock_bins)} mock bins successfully"}
+
+@api_router.get("/camera/reuse")
+async def reuse_suggestion():
+    img = get_camera_image()
+
+    waste = random.choice(["plastic bottle"])
+
+    reuse_ideas = {
+        "plastic bottle": ["Pen stand", "Plant pot", "Bird feeder"],
+       
+    }
+
+    return {
+        "detected_waste": waste,
+        "suggestions": reuse_ideas[waste],
+        "message": "Reuse instead of throw 🌱"
+    }
+
+
+@api_router.get("/camera/test")
+async def camera_test():
+    img = get_camera_image()
+    return {
+        "status": "camera connected",
+        "size": img.size
+    }
+
+
+@api_router.post("/camera/violation")
+async def camera_violation():
+    img = get_camera_image()
+
+    # DEMO AI logic (replace later)
+    detected_waste = random.choice(["biodegradable", "plastic"])
+    expected_bin = "biodegradable"
+
+    if detected_waste != expected_bin:
+        return {
+            "status": "violation",
+            "warning": True,
+            "message": "Wrong waste detected in green bin!",
+            "action": "Sound alert + LED blink"
+        }
+
+    return {
+        # "status": "ok",
+        # "message": "Correct waste disposal 👍"
+        "status": "violation",
+            "warning": True,
+            "message": "Wrong waste detected in green bin!",
+            "action": "Sound alert + LED blink"
+    }
+
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws/{user_id}")

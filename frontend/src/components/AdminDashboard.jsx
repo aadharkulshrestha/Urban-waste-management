@@ -44,6 +44,7 @@ import { toast } from "sonner";
 
 import { Navigation } from "lucide-react";
 import MapView from "./MapView";
+import { API_BASE } from "../config";
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
@@ -74,8 +75,6 @@ const AdminDashboard = () => {
   const [reuseResult, setReuseResult] = useState(null);
   const [cameraImgUrl, setCameraImgUrl] = useState(null);
   const [cameraKey, setCameraKey] = useState(0);
-
-  const API_BASE = `${(process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "")}/api`;
 
   const getAuthHeaders = () => ({
     Authorization: `Bearer ${localStorage.getItem("token")}`,

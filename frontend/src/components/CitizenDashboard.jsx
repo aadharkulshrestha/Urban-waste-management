@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../App";
 import { toast } from "sonner";
+import { API_BASE } from "../config";
 
 const CitizenDashboard = () => {
   const { user, logout } = useAuth();
@@ -62,8 +63,6 @@ const CitizenDashboard = () => {
     quantity_estimate: "medium",
     special_instructions: "",
   });
-
-  const API_BASE = `${(process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "")}/api`;
 
   const getAuthHeaders = () => ({
     Authorization: `Bearer ${localStorage.getItem("token")}`,

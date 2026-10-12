@@ -33,6 +33,7 @@ import { useAuth } from "../App";
 import { toast } from "sonner";
 import { Navigation } from "lucide-react";
 import MapView from "./MapView";
+import { API_BASE } from "../config";
 
 const WorkerDashboard = () => {
   const { user, logout } = useAuth();
@@ -48,8 +49,6 @@ const WorkerDashboard = () => {
     route_reviewed: false,
   });
   const [locationTracking, setLocationTracking] = useState(false);
-
-  const API_BASE = `${(process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "")}/api`;
 
   const getAuthHeaders = () => ({
     Authorization: `Bearer ${localStorage.getItem("token")}`,

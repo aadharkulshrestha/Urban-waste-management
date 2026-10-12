@@ -13,7 +13,7 @@ import AdminDashboard from './components/AdminDashboard';
 import "leaflet/dist/leaflet.css";
 
 // API Configuration
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
 const API_BASE = `${BACKEND_URL}/api`;
 
 // Auth Context

@@ -75,7 +75,7 @@ const AdminDashboard = () => {
   const [cameraImgUrl, setCameraImgUrl] = useState(null);
   const [cameraKey, setCameraKey] = useState(0);
 
-  const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
+  const API_BASE = `${(process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "")}/api`;
 
   const getAuthHeaders = () => ({
     Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -264,7 +264,7 @@ const AdminDashboard = () => {
     }
   };
 
-  const CAMERA_URL = `${process.env.CAMERA_URL}`;
+  const CAMERA_URL = process.env.REACT_APP_CAMERA_URL || process.env.CAMERA_URL || "";
 
   const checkWaste = async (bin) => {
     setCameraBin(bin);

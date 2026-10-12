@@ -30,13 +30,25 @@ void setup() {
   digitalWrite(RED_LED, LOW);
   digitalWrite(YELLOW_LED, LOW);
 
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.setSleep(false); // Prevents mobile hotspot from disconnecting idle ESP32
+
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
+
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
     delay(500);
     Serial.print(".");
+    attempts++;
   }
-  Serial.println("\nConnected!");
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nConnected! IP: " + WiFi.localIP().toString());
+  } else {
+    Serial.println("\nInitial connection timed out. Will auto-retry in loop.");
+  }
 }
 
 long getDistance() {
@@ -81,25 +93,47 @@ void loop() {
   Serial.print(fill);
   Serial.println(" %");
 
-  // Send to backend
+  // Send to backend (with auto-reconnect if dropped)
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi not connected. Reconnecting...");
+    WiFi.disconnect();
+    WiFi.reconnect();
+    int r = 0;
+    while (WiFi.status() != WL_CONNECTED && r < 10) {
+      delay(500);
+      r++;
+    }
+  }
+
   if (WiFi.status() == WL_CONNECTED) {
     WiFiClientSecure client;
     client.setInsecure(); // Required for HTTPS on ESP32 without root certificate bundle
+    client.setTimeout(8000);
 
     HTTPClient http;
-    http.begin(client, serverURL);
-    http.addHeader("Content-Type", "application/json");
+    http.setTimeout(8000);
+    if (http.begin(client, serverURL)) {
+      http.addHeader("Content-Type", "application/json");
 
-    String json = "{";
-    json += "\"bin_id\":\"BIN_001\",";
-    json += "\"distance\":" + String(distance) + ",";
-    json += "\"fill_percentage\":" + String(fill) + ",";
-    json += "\"device_id\":\"esp32_001\"";
-    json += "}";
+      String json = "{";
+      json += "\"bin_id\":\"BIN_001\",";
+      json += "\"distance\":" + String(distance) + ",";
+      json += "\"fill_percentage\":" + String(fill) + ",";
+      json += "\"device_id\":\"esp32_001\"";
+      json += "}";
 
-    int code = http.POST(json);
-    Serial.println("Response: " + String(code));
-    http.end();
+      int code = http.POST(json);
+      Serial.println("HTTP Response code: " + String(code));
+      if (code > 0) {
+        String payload = http.getString();
+        Serial.println("Server Response: " + payload);
+      } else {
+        Serial.println("HTTP POST failed, error: " + http.errorToString(code));
+      }
+      http.end();
+    } else {
+      Serial.println("Unable to connect to server URL");
+    }
   }
 
   delay(5000); // update every 5 seconds

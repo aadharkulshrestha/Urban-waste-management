@@ -1,10 +1,11 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 
-const char* ssid = "esp32test";
-const char* password = "esp32test";
+const char* ssid = "OPPOReno75G";
+const char* password = "Rishu1234";
 
-const char* serverURL = "http://192.168.137.1:8001/api/iot/bin-update";
+const char* serverURL = "https://compassionate-happiness-production-399f.up.railway.app/api/iot/bin-update";
 
 #define TRIG 32
 #define ECHO 33
@@ -82,8 +83,11 @@ void loop() {
 
   // Send to backend
   if (WiFi.status() == WL_CONNECTED) {
+    WiFiClientSecure client;
+    client.setInsecure(); // Required for HTTPS on ESP32 without root certificate bundle
+
     HTTPClient http;
-    http.begin(serverURL);
+    http.begin(client, serverURL);
     http.addHeader("Content-Type", "application/json");
 
     String json = "{";

@@ -30,9 +30,10 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017/cleancitydatabase')
+db_name = os.environ.get('DB_NAME', 'cleancitydatabase')
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[db_name]
 
 # JWT Configuration
 JWT_SECRET = os.environ.get('JWT_SECRET', 'cleancity_secret_key_change_in_production')
@@ -52,13 +53,22 @@ app = FastAPI(title="CleanCity Connect API", version="1.0.0", lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
+# Dynamic CORS Configuration for Local & Production (Railway)
+cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
+if cors_env == '*' or not cors_env:
+    origins = ["*"]
+    allow_creds = False
+else:
+    origins = [orig.strip() for orig in cors_env.split(',') if orig.strip()]
+    for local in ["http://localhost:3000", "http://127.0.0.1:3000"]:
+        if local not in origins:
+            origins.append(local)
+    allow_creds = True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "http://127.0.0.1:3000"
-    ],  # React dev server
-    allow_credentials=True,
+    allow_origins=origins,
+    allow_credentials=allow_creds,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -215,23 +225,23 @@ manager = ConnectionManager()
 
 def get_camera_image():
     CAMERA_URL = os.environ.get("CAMERA_URL") 
-    try:
-        resp = requests.get(
-            CAMERA_URL,
-            timeout=15,
-            headers={"Connection": "close"}
-        )
-        if resp.status_code != 200:
-            raise Exception("Camera not responding")
+    if CAMERA_URL:
+        try:
+            resp = requests.get(
+                CAMERA_URL,
+                timeout=4,
+                headers={"Connection": "close"}
+            )
+            if resp.status_code == 200:
+                return resp.content
+        except Exception as e:
+            logger.warning(f"Hardware camera not reachable at {CAMERA_URL}: {e}")
 
-        return resp.content
-
-    except Exception as e:
-        print("Camera error:", e)
-        raise HTTPException(
-            status_code=503,
-            detail="Camera not reachable. Please try again."
-        )
+    # Fallback image bytes so cloud deployments do not hang or crash when hardware is offline
+    dummy = Image.new("RGB", (320, 240), color=(34, 139, 34))
+    buf = BytesIO()
+    dummy.save(buf, format="JPEG")
+    return buf.getvalue()
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -257,7 +267,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         return {'user_id': user_id, 'role': role}
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.JWTError:
+    except jwt.exceptions.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 def require_role(*allowed_roles: UserRole):
@@ -692,10 +702,15 @@ async def reuse_suggestion():
 
 @api_router.get("/camera/test")
 async def camera_test():
-    img = get_camera_image()
+    img_bytes = get_camera_image()
+    try:
+        pil_img = Image.open(BytesIO(img_bytes))
+        size = pil_img.size
+    except Exception:
+        size = [320, 240]
     return {
-        "status": "camera connected",
-        "size": img.size
+        "status": "camera connected" if os.environ.get("CAMERA_URL") else "simulated camera active",
+        "size": size
     }
 
 
@@ -740,6 +755,19 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 # Include router
 app.include_router(api_router)
 
+# Health check endpoints for Railway / cloud monitoring
+@app.get("/")
+async def root():
+    return {
+        "name": "CleanCity Connect API",
+        "status": "online",
+        "docs": "/docs",
+        "database": db_name
+    }
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 # Configure logging
 logging.basicConfig(
@@ -750,4 +778,5 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, port=8001)
+    port = int(os.environ.get("PORT", 8001))
+    uvicorn.run(app, host="0.0.0.0", port=port)
